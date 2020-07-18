@@ -1,0 +1,606 @@
+---
+  title: "Customer segmentation using clustering technique"
+author: "James Khonje"
+date: ' May 16, 2020'
+output:
+  pdf_document:
+  latex_engine: xelatex
+number_sections: yes
+toc: yes
+toc_depth: 3
+html_document:
+  df_print: paged
+toc: yes
+toc_depth: '3'
+---
+  
+  
+  # Define the goal
+  
+  The goal of this project is to use machine learning segmentation (Cluster analysis) techniques to identify subgroups of customers based on common similarities between them (or market segmentation).These market segmentations are important for business marketing campaign. Overall we aim at identifying the segments based on annual sales into different subgroups. Customer segmentation can be defined as grouping of potential customers in a given market into specific clusters of customers where the clusters have unique customers that share certain similarities. There are several characteristics that can be used in this clustreing exercise ranging from customer shopping habits, customer demographic factors. 
+
+
+# Introduction
+
+Clustering is the task of assigning a set of objects into groups (clusters) so that the objects
+in the same cluster are more similar to each other than objects in other clusters. there are different clustering techniques used in allocating items into distinct subgroups based on their similarities. The most used techniques are k-means and hierachicalk clustering.  
+
+Thus, there is no outcome to be predicted, and the algorithm just tries to find patterns in the data. Segmentation is the process of categorising customers into groups based on identified similarities in their purchasing behaviours. This information allows companies to target customer groups with various promotions as one way of boosting sales, revenue collection and also for customer retainion purposes. 
+
+In this project machine learning techniques will be used to identifiy these customer clusters by using customer characteristics for a Wholesale distributor.
+
+It is expected that the reader will have some knowledge of unsupervised learning in relation to clustering techniques and their implementation using R. We will not describe the methods in detail in this paper but only refer to them to avoid increasing the size of the report and also may distort the focus of the project. Please find a suitable clustering textbook, materials to familiarise yourself with the methods.
+
+# Data description and loading
+
+Data used in this project was downloades from this source:  https://archive.ics.uci.edu/ml/machine-learning-databases/00292/. The dataset refers to clients of a wholesale distributor in Portugal.It includes the annual spending in monetary units (m.u.) on diverse product categories by different customers located in different regions in Portugal.
+
+
+Data description of variables can be accessed here:
+  
+  https://archive.ics.uci.edu/ml/datasets/Wholesale+customers#
+
+
+## Loading and preprocessing of data
+
+### Preparing working space
+
+```{r eco=FALSE}
+
+# Clear your workspace by removing all objects returned by ls():
+
+rm(list = ls()) 
+
+# clear window, the same as ctrl+L. 
+
+cat("\014") 
+```
+
+### install and load necessary packages
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+
+if(!require(factoextra)) install.packages("factoextra", repos = "http://cran.us.r-project.org")
+if(!require(NbClust)) install.packages("NbClust", repos = "http://cran.us.r-project.org")
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(Hmisc)) install.packages("Hmisc", repos = "http://cran.us.r-project.org")
+if(!require(dplyr)) install.packages("dplyr", repos = "http://cran.us.r-project.org")
+if(!require(reshape2)) install.packages("reshape2", repos = "http://cran.us.r-project.org")
+if(!require(knitr)) install.packages("knitr", repos = "http://cran.us.r-project.org")
+if(!require(corrplot)) install.packages("corrplot", repos = "http://cran.us.r-project.org")
+if(!require(cluster)) install.packages("cluster", repos = "http://cran.us.r-project.org")
+if(!require(GGally)) install.packages("GGally", repos = "http://cran.us.r-project.org")
+if(!require(plyr)) install.packages("plyr", repos = "http://cran.us.r-project.org")
+if(!require(hrbrthemes)) install.packages("hrbrthemes", repos = "http://cran.us.r-project.org")
+if(!require(ggplot2)) install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+if(!require(clustertend)) install.packages("clustertend", repos = "http://cran.us.r-project.org")
+if(!require(ggplot2)) install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+
+
+#library(factoextra)
+#library(NbClust)
+#library(tidyverse) # Data manipulation
+#library(Hmisc)     # Descriptive data analysis
+#library(dplyr)     # Data rangling
+#library(reshape2)  # melting
+#library(knitr)
+#library(corrplot)
+#library(cluster) ## clustering algorithms
+#library(GGally)  # for ggpairs
+#library(Matrix)  # for sparseMatrix
+```
+
+Dataset to be used isloaded into our workspace using the code below. 
+
+```{r r Load Dataset, message=FALSE, warning= FALSE}
+
+# Code to download data from source
+
+dl <- tempfile()
+download.file(
+  "https://archive.ics.uci.edu/ml/machine-learning-databases/00292/Wholesale%20customers%20data.csv", dl)
+
+library(tidyverse)
+
+customerData <- read_csv(dl)
+
+```
+
+# Exploratory Data Analysis (EDA)
+
+EDA helps us to learn more about our data before model development.
+
+## Descriptive statistics
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+
+# Check if any missing data present
+
+customerData[!complete.cases(customerData),] #list rows of data that have missing values
+
+# customerData <- na.omit(customerData) # Remove all missing values cases. Run if necessary
+
+```
+
+To view the first six rows the head() was used.
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+knitr::kable(head(customerData)) #see first 6 rows
+```
+
+View of summary statistics of our wholesale data. 
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+summary(customerData) 
+```
+
+The summary statistics shows that there were a total of 298 'channel 1' and 142 'channel 2' and that most of customers order/purchases were from Other regions.
+
+Using glipmse() function reveals that the dataset has 440 obseravtions with 8 variables. The first two variables Channel and Region are factors although treated as numbers. The rest of variables shows total annual spending on them over the study period, and there are no missing values. 
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+glimpse(customerData)
+
+```
+
+Note the first two variables are factors that represent customer locations (Region whether Lisbon, Porto or Other regions within Portugal) and Channel of purchase whether  Hotere (hotel/restaurant/cafe) or retail. Will replace the factors with their real names below to avoid confusions.
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+customerData$Channel <-  as.factor(customerData$Channel)
+customerData$Region <-  as.factor(customerData$Region)
+# Rename the factors to give them descriptine names
+
+library(plyr)
+
+# Note Horeca is used to stand for hotel/restaurant/cafe channel for convenience
+
+customerData$Channel <- revalue(customerData$Channel,c("1"="Horeca", "2"="retail"))
+customerData$Region <- revalue(customerData$Region, c("1"="Lisbon","2"="Porto","3"="other region")) 
+glimpse(customerData)
+```
+
+## Analysis of Region and Channel
+
+First step will be to view the distribution of sales by customer location and type of business (Channel)
+
+The tables below show that most of the customers placed most orders working in the hotel/restaurant/cafe establishment with 68 per cent of customers are from Horeca establishment and the rest retail establishment. 
+
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+# knitr::kable will be used to create better looking tables
+# Rewrite this
+
+knitr::kable(table(customerData$Channel),col.names = c("Channel","Total") )
+knitr::kable(prop.table(table(customerData$Channel)), col.names = c("Channel","Prop"),digits = 3)
+
+```
+
+Similary with regard to customer location tables below clearly shows the location 'other region' had more demand for all produts compared to Lisbon and Porto combined. Regarding regional location of customers the proportion tables shows that 72 percent of them are located in other regions of Portugal.
+
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+knitr::kable(table(customerData$Region),col.names = c("Region","Total"))
+knitr::kable(prop.table(table(customerData$Region)), col.names = c("Region","Prop"),digits = 3)
+```
+
+### Channel and Region total orders
+
+To increase data visualisation the gather() function was used to tidy data so that products and values are in separate column for easier analysis for Channel and Region data.
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+
+# Create new data named Channel_Region
+
+Channel_Region<- customerData %>% gather("Fresh", "Milk", "Grocery", "Frozen", "Detergents_Paper", "Delicassen", key = "product", value = "total")
+
+ggplot(data = Channel_Region) +
+  geom_bar(mapping = aes(x=Channel, fill= product),
+           position="dodge") +
+  facet_grid(Channel_Region$Region) +
+  theme(legend.position = "top",
+        legend.direction = "horizontal")
+```
+
+The chart above shows that most of the products were sold to Hotere with region 'Other regions' leading as explained before. There were almost similar purchases of products by retail channel based in Lisbon and Porto regions.
+
+This clearly shows other regions had more demand for all produts compared to Lisbon and Porto combined. More data visualsiation on distribution can be viewed below by purchase channel and customer location.
+
+The boxplot below shows the distribution of product sales by purchasing establishments either Horeca or retail by each location.
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+ggplot(data = Channel_Region,aes(x=Channel, y=total)) +
+  geom_boxplot(mapping = aes(fill= product))+
+  facet_wrap( ~ Region, scales="free", ncol = 2) +
+  xlab(label = NULL) + ylab(label = NULL) + ggtitle("Boxplots for customer purchase channels") +
+  theme(legend.position = "top",
+        legend.direction = "horizontal")
+
+```
+
+The boxplot below shows the distribution of product sales by customer locations
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+ggplot(data = Channel_Region,aes(x=product, y=total)) +
+  geom_boxplot(mapping = aes(fill= product))+
+  facet_wrap( ~ Region, scales="free", ncol = 2) +
+  xlab(label = NULL) + ylab(label = NULL) + ggtitle("Boxplots for customer locations") +
+  theme(legend.position = "top",
+        legend.direction = "horizontal")
+
+```
+
+The chat below shows the relative size of products bought from the wholesaler by Region.
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+ggplot(data = Channel_Region) +
+  geom_bar(mapping = aes(x=Region, fill= product)) +
+  theme(legend.position = "top",
+        legend.direction = "horizontal")
+
+```
+
+
+## Univariate plots 
+
+Log transformation of data was used because it provides a better visualisation compared to nromalisation using z-score or using histogram. Using facet_wrap() function the folowing small multiple charts help to show data the normal distribution of our products. It can be seen that Detergents_Paper have a bimodal distribution compared to other products.
+
+The histogram below using original data shows that  products in the dataset have different distributions and that for annual spending above 30,000 there are lots of outliers.
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+
+ggplot(data=Channel_Region, aes(total, group=product, fill=product)) +
+  geom_histogram(alpha=0.6) +
+  scale_x_continuous() +
+  scale_y_continuous() +
+  facet_wrap(~product) +
+  theme(
+    legend.position="none",
+    panel.spacing = unit(0.1, "lines"),
+    axis.ticks.x=element_blank()
+  )
+```
+
+The histogram shows that it may be helpful to consider annual spendings of less than 30,000 and consider values above 30,000 as outliers. To overcome the issue with data spread of annual spending, values have been transformed into logarithms for easier analysis.
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+
+ggplot(data=Channel_Region, aes(log10(total), group=product, fill=product)) +
+  geom_density(adjust = 1.5) +
+  scale_x_continuous() +
+  scale_y_continuous() +
+  facet_wrap(~product) +
+  theme(
+    legend.position="none",
+    panel.spacing = unit(0.1, "lines"),
+    axis.ticks.x=element_blank()
+  )
+
+
+```
+
+Similar non-normal distribution can be observed at regional level as shown in charts below. It shows all annual spending for the regions are positively skewed.
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+
+ggplot(data=Channel_Region, aes(total, group=Region, fill=Region)) +
+  geom_density(adjust = 1.5) +
+  scale_x_continuous() +
+  scale_y_continuous() +
+  facet_wrap(~Region) +
+  theme(
+    legend.position="none",
+    panel.spacing = unit(0.1, "lines"),
+    axis.ticks.x=element_blank()
+  )
+
+
+```
+
+# Modelling approach
+
+After conducting EDA on data we move on with clustering first by creating a new data object named 'customer_filtered' that retain only important features on goods boughts by removing non-product vaiables:- Channel and Region as they are not useful in the segmentation exercise. 
+
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+customer_filtered <- customerData %>% dplyr::select(Fresh, Milk, Grocery, Frozen, Detergents_Paper, Delicassen)
+
+# Check number of variables is 6 not 8
+dim(customer_filtered)
+```
+
+As the values are positively skewed we transformed them using log10(). Using the transformed data we reviewed the spread of our products using boxplots athat shows an improved and interpretable spread. 
+```{r}
+# Create histograms for each product
+
+par(mfrow=c(1,6))
+for(i in 1:6) {
+  boxplot(log10(customer_filtered[,i]), main = names(customer_filtered)[i], col = i)
+}
+
+```
+
+
+## Multivariate visualisation
+
+Multivariate plots shows relationships or interactions between variables in a database and provides a visual understanding of their relationship. We used the ggpairs() function below with the correlations between them provided on the top right corner.
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+
+library(GGally)
+
+custom_scaled <- log10(customer_filtered)
+custom_scaled %>% ggpairs(., 
+                          mapping = ggplot2::aes(colour = "RdYlGn"), 
+                          lower = list(continuous = wrap("smooth", alpha = 0.3, size=0.1)))
+# Options 
+
+#'palette': a ColorBrewer palette to be used for correlation coefficients. 
+#'name': a character string used for legend title.
+#'label': logical value. If TRUE, the correlation coefficients are displayed on the plot.
+#'label_color': color to be used for the correlation coefficient
+
+```
+
+A reproduction of the correlation shows that Milk and Grocery are positively closely correlated to Detergent_Paper
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+# The function ggcorr() draws a correlation matrix plot using ggplot2.
+
+ggcorr(custom_scaled, palette = "RdBu", label = TRUE,label_color="navy")
+
+```
+
+
+## Importance of transforming data
+
+Transforming data is necessary as it helps lessen the impcat of different magnitudes in data values  and avoids variables dominating that can affect our results.
+
+Before embarking on clustering its important to check if clusters exist in our datset by using the Hopkins Statistic from factoexits() library. This is commonly referred to as Clustering tendency. The Hopkins statistic is reported as hopkins_stat and ranges from 0-1 with values close to 0 indicating the existence of clusters. Our hopkins_stat = 0.187 clearly indicate existence of clusters as its close to zero and will proceed with our analysis.
+
+```{r echo=TRUE,  message = FALSE, warning = FALSE, eval = TRUE}
+
+set.seed(5522)
+
+h <- clustertend::hopkins(data = custom_scaled, n = 50)
+h
+```
+
+There are different approaches to clustering exercise and we will try different methods.
+
+# Clustering algorithms
+
+## Distance Measures
+
+To be able to classify items a measure of diostance between those items is important. The distance defines how similar two items are. The most used distance metrix is euclidean that will be adopted in this paper. If the distance is small it means items are more similar otherwise will be stated as disimilar and far apart to belong to the same group. 
+
+$$ d= 1- similarity$$
+  
+  where d stands for disimilarity
+
+### K-means clustering
+
+This is one of the commonly used method. k-means is an iterative method which minimizes the within-class sum of squares for a given number of clusters (MacQueen 1967; Hartigan and Wong 1979). In most cases prior information may help to determine the optimal k that maximises the within group sum of squares.
+
+The algorithm starts with an initial guess for cluster centers, and each observation is placed in the cluster to which it is closest. The cluster centers are then updated, and the entire process is repeated until
+the cluster centers no longer move. 
+
+Determining best number of clusters
+
+NbCust function is useful in determining the relevant number of clusters in a dataset as it use majority rule for all other methods
+The distance metric usd is set to "euclidean"; other available options e.g "manhattan"
+
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+library("NbClust")
+nb <- NbClust(custom_scaled, distance = "euclidean", min.nc = 2,
+              max.nc = 8, method = "kmeans")
+
+```
+
+Results shows that the according to the majority rule, the best number of clusters is 2.  
+
+We can view clustering results by using the function below (Visualizing K-means clusters)
+
+fviz_cluster will perform principal component analysis (PCA) and plot the data points according to the first two principal components that explain the majority of the variance.
+
+With the knowledge of our K we can compute
+
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+k2 <- kmeans(custom_scaled, centers = 2, nstart = 25)
+fviz_cluster(k2, data = custom_scaled)
+
+```
+
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+fviz_nbclust(nb)
+
+```
+
+### K-means cluster validation
+
+The average silhouette method is used to measure the quality of a clustering. That is it checks how well each object classified lies within its own cluster. A higher average silhouette width indicates the clustering is good. The S_i_ ranges from -1 to 1. A value close to 1 indicates the objects are well clustered (objects in the cluster are similar). A value close to -1 shows poorly clustered objects. Silhouette provides a visualisation of how well each object lies within its cluster.
+
+A silhouette is defined as follows:
+  
+  
+  $$ s = \frac{b(i)-a(i)}{max({a(i),b(i)})} $$
+  where `a(i)` is the average distance to all other data points in the cluster and `b(i)` is the minimum of average distance to other clusters.
+
+The optimal number of clusters for K-means method will be visualised, using average silhouette and within cluster sums of squares statistics.
+
+The chart below shows that our average silhouette width for K-means is 0.3 which is close to 1 indicating that products have been classified properly.Data points seem to be well matched to their own clusters.
+
+The Tables shows that we have two clusters of sizes 258 and 182 from the Wholesale dataset with cluster number 1 the biggest
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+
+fviz_silhouette(silhouette(eclust(custom_scaled,FUNcluster="kmeans", k=2, hc_metric = "euclidean")$cluster, dist(custom_scaled)))
+
+```
+
+
+### PAm Clustering
+
+The PAM method is similar to k-means except that PAM uses actual points in dataset (medodoids). PAM stands for "partition around medoids". We can now visualize these clusters using function clusplot() from the cluster library for our dataset.
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+
+pam.cust <- pam(custom_scaled,2)
+print(pam.cust)
+
+```
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+pam.cust$medoids
+
+```
+
+Drawing a PAM cluster plot will automatically use the principle component anaysis as we have more than two products and uses the first two principal dimesnsions in plotting as shown below. Note, unlike k-means, PAM uses actual points in dataset (medodoids) whilst the k-means uses centroids (cluster centres)
+
+Visualizing PAM clusters
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+fviz_cluster(pam.cust,
+             ellipse.type = "t", # Concentration ellipse
+             ggtheme = theme_classic()
+)
+```
+
+Optimal number of clusters using PAM can be shown in chart below.
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+
+fviz_nbclust(custom_scaled, pam, method="wss") + theme_classic()
+
+```
+
+###  Principal Component Analysis (PCA)
+
+PCA used dimension reduction techniques to correlated variables by summarising them to fewer new features and then plot data points according to the first two principal components coordinates. To perform PCA it is recommended for the variables to be scaled as we have done here. Unscaled data normally leads to huge variances reported that may have largest loading.
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+pr.out <- prcomp(custom_scaled) 
+summary(pr.out)
+pr.out$rotation
+
+```
+
+The first PCA loading places approximately equal weights on Milk, Grocery and Detergent_Paper. The second loading vector on the other hand places its weight on Fresh and Frozen. Delicassen product is less correlated with other products (visualisation in script).
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+
+# This has been commented as it throws and error when trying to plot. Please uncomment and run the code
+
+#autoplot(pr.out, data=custom_scaled, 
+#       loadings = T, loadings.label = T, 
+#       colour = "navy",
+#      loadings.label.size=2.5,
+#       loadings.colour = "red",
+#      main = "PCA result of wholesale data")
+```
+
+
+### Hierarchical K-Means Clustering
+
+To finish the clustering exercise I attempted looking at the Hierarchical K-Means Clustering to see how the clustering will look like.
+
+This methods involves multiple steps. First created an object called cust_h
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+
+cust_h <-hkmeans(custom_scaled, 2)
+names(cust_h)
+```
+
+Visualizing Dendrogram clusters based on kmeans of 2.
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+
+# Visualize the tree
+fviz_dend(cust_h, cex = 0.6, palette = "jco",
+          rect = TRUE, rect_border = "jco", rect_fill = TRUE)
+
+```
+
+The problem with hierarchical clustering is that does not tell us the number of clusters present. We use aprior knowledge to decide how to cut the tree. Using the K-means we had use to generate the dendrogram with two top branches.
+
+
+# Determining Optimal Clusters
+
+There are three main methods for determining optimal clusters. These are
+
+1. Elbow method
+2. Silhouette method and
+3. Gap statistic
+
+
+## Elbow Method
+
+This method attempts to gauge how the similarity/disimilarity within the clusters changes for different values of k.
+The function fviz_nbclust() is used for elbow method and is implemented as below
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+
+set.seed(5522)
+
+fviz_nbclust(custom_scaled, kmeans, method = "wss") +
+  geom_vline(xintercept = 2, linetype=2)
+
+```
+
+## Average Silhouette method 
+
+The average silhouette measures the quality of a clustering. The function fviz_nbclust() is used for Silhouette method and is implemented as below. From the plot, the suggested number of clusters is 2.
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+
+set.seed(5522)
+
+fviz_nbclust(custom_scaled, kmeans, method = "silhouette")
+
+
+```
+
+## Gap statistic Method
+
+This method calculates a goodness of clustering measure, the "gap" statistic. It compares the total within intra-cluster variation for different values of k with their expected values under null reference distribution of the data. The function fviz_gap_stat() is used for Gap method and is implemented as below
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+set.seed(5522)
+
+gap <- clusGap(custom_scaled, 
+               FUN = kmeans, nstart = 30,
+               K.max = 8, B = 30)
+```
+
+From the plot, the suggested number of clusters is 2.
+
+```{r echo=FALSE,  message = FALSE, warning = FALSE, eval = TRUE}
+fviz_gap_stat(gap)
+
+```
+
+
+# Results 
+
+The paper has explored a broad range of commong clustering techniques as a means of unsupervised learning to group the products into groups. All techniques used in the paper have shown that the optimal clusters for this data set is 2. This is across the board. This was confirmed by determining the Optimal Number Of Clusters using different methods. The results were achieved after transforming the data into usable form. 
+
+This means to target customers properly the wholesale distributor should group its customers into two sub groups and target them according to their similarities to increase their revenue collection and also maybe for customer retention.
+
+# Conclusion
+
+It should be stated that there are different even more advanced techniques that can be employed in this study but were not used. The paper had extensively reviewed the common techniques. For future improvements it would be better to undertake a different approach by selecting annual spending values less than 30,000 to remove outliers. These small values tend to distort data distribution and treating them similary with lower spending (<30,000) does not help in making proper clustering. The data was transformed to remove this impact of small values, even though transformation like these are not encouraged. 
+
+
+# Reference Section
+
+1. MacQueen JB (1967). "Some Methods for Classification and Analysis of Multivariate Observations." In LML Cam, J Neyman (eds.), Proceedings of the Fifth Berkeley Symposium on Mathematical Statistics and Probability, volume 1, pp. 281-297.
+
+2. James, G., Witten, D., Hastie, T., & Tibshirani, R. (2013). "An introduction to statistical learning: With applications in R"",APA (6th ed.)
+
+
+
+
+
